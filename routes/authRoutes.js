@@ -15,6 +15,7 @@ const { registerValidator, loginValidator } = require('../middleware/validators'
 
 router.post('/register', registerValidator, register);
 router.post('/login', loginValidator, login);
+router.post('/refresh-token', refreshAccessToken);
 
 router.use(protect);
 

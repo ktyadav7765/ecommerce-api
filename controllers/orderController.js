@@ -1,9 +1,91 @@
+const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { orderQueue } = require('../config/queue');
+
+const createOrder = asyncHandler(async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const cart = await Cart.findOne({ user: req.user.id })
+      .populate('items.product', 'name image stock isActive price discountPrice')
+      .session(session);
+
+    if (!cart || cart.items.length === 0) {
+      throw new AppError('Cart is empty. Add items before ordering.', 400);
+    }
+
+    for (const item of cart.items) {
+      if (!item.product.isActive) {
+        throw new AppError(
+          `Product "${item.product.name}" is no longer available`,
+          400
+        );
+      }
+
+      if (item.quantity > item.product.stock) {
+        throw new AppError(
+          `Not enough stock for "${item.product.name}". Available: ${item.product.stock}`,
+          400
+        );
+      }
+    }
+
+    const orderItems = cart.items.map((item) => ({
+      product: item.product._id,
+      name: item.product.name,
+      quantity: item.quantity,
+      price: item.price,
+      image: item.product.image
+    }));
+
+    const orders = await Order.create(
+      [
+        {
+          user: req.user.id,
+          items: orderItems,
+          shippingAddress: req.body.shippingAddress,
+          paymentMethod: req.body.paymentMethod
+        }
+      ],
+      { session }
+    );
+
+    const order = orders[0];
+
+    for (const item of cart.items) {
+      await Product.findByIdAndUpdate(
+        item.product._id,
+        { $inc: { stock: -item.quantity } },
+        { session }
+      );
+    }
+
+    cart.items = [];
+    await cart.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    await orderQueue.add({
+      orderId: order._id.toString(),
+      userId: req.user.id
+    });
+
+    res.status(201).json({
+      success: true,
+      data: order
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
+});
 
 const createOrder = asyncHandler(async (req, res) => {
   const cart = await Cart.findOne({ user: req.user.id }).populate(

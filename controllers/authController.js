@@ -1,26 +1,37 @@
 const User = require('../models/User');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
+const jwt = require('jsonwebtoken');
 
-const sendTokenResponse = (user, statusCode, res) => {
-  const token = user.generateToken();
+const sendAuthResponse = async (user, statusCode, res) => {
+  const accessToken = user.generateAccessToken();
+  const refreshToken = user.generateRefreshToken();
+
+  user.refreshToken = refreshToken;
+  await user.save({ validateBeforeSave: false });
 
   const cookieOptions = {
-    expires: new Date(
-      Date.now() + process.env.JWT_COOKIE_EXPIRE * 24 * 60 * 60 * 1000
-    ),
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict'
   };
 
-  user.password = undefined;
-
-  res.status(statusCode).cookie('token', token, cookieOptions).json({
-    success: true,
-    token,
-    data: { user }
-  });
+  res
+    .status(statusCode)
+    .cookie('accessToken', accessToken, {
+      ...cookieOptions,
+      expires: new Date(Date.now() + 15 * 60 * 1000)
+    })
+    .cookie('refreshToken', refreshToken, {
+      ...cookieOptions,
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    })
+    .json({
+      success: true,
+      accessToken,
+      refreshToken,
+      data: { user }
+    });
 };
 
 const register = asyncHandler(async (req, res) => {
@@ -32,8 +43,7 @@ const register = asyncHandler(async (req, res) => {
   }
 
   const user = await User.create({ name, email, password });
-
-  sendTokenResponse(user, 201, res);
+	await sendAuthResponse(user, 201, res);
 });
 
 const login = asyncHandler(async (req, res) => {
@@ -54,17 +64,30 @@ const login = asyncHandler(async (req, res) => {
   if (!isMatch) {
     throw new AppError('Invalid credentials', 401);
   }
-
-  sendTokenResponse(user, 200, res);
+	await sendAuthResponse(user, 201, res);
 });
 
 const logout = asyncHandler(async (req, res) => {
-  res.cookie('token', 'none', {
-    expires: new Date(Date.now() + 5 * 1000),
-    httpOnly: true
-  });
+  const user = await User.findById(req.user.id).select('+refreshToken');
 
-  res.json({ success: true, message: 'Logged out successfully' });
+  if (user) {
+    user.refreshToken = undefined;
+    await user.save({ validateBeforeSave: false });
+  }
+
+  res
+    .cookie('accessToken', 'none', {
+      expires: new Date(Date.now() + 5000),
+      httpOnly: true
+    })
+    .cookie('refreshToken', 'none', {
+      expires: new Date(Date.now() + 5000),
+      httpOnly: true
+    })
+    .json({
+      success: true,
+      message: 'Logged out successfully'
+    });
 });
 
 const getMe = asyncHandler(async (req, res) => {
@@ -115,8 +138,39 @@ const updatePassword = asyncHandler(async (req, res) => {
   sendTokenResponse(user, 200, res);
 });
 
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  const token = req.cookies.refreshToken || req.body.refreshToken;
+
+  if (!token) {
+    throw new AppError('Refresh token not provided', 401);
+  }
+
+  const decoded = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
+
+  const user = await User.findById(decoded.id).select('+refreshToken');
+
+  if (!user || user.refreshToken !== token) {
+    throw new AppError('Invalid refresh token', 401);
+  }
+
+  const newAccessToken = user.generateAccessToken();
+
+  res.cookie('accessToken', newAccessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    expires: new Date(Date.now() + 15 * 60 * 1000)
+  });
+
+  res.json({
+    success: true,
+    accessToken: newAccessToken
+  });
+});
+
 module.exports = {
   register,
+  refreshAccessToken,
   login,
   logout,
   getMe,

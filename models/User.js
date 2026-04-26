@@ -11,6 +11,10 @@ const userSchema = new mongoose.Schema(
       minlength: [2, 'Name must be at least 2 characters'],
       maxlength: [50, 'Name cannot exceed 50 characters']
     },
+    refreshToken: {
+  type: String,
+  select: false
+},
     email: {
       type: String,
       required: [true, 'Email is required'],
@@ -66,6 +70,21 @@ userSchema.methods.generateToken = function () {
     { id: this._id, role: this.role },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRE }
+  );
+};
+userSchema.methods.generateAccessToken = function () {
+  return jwt.sign(
+    { id: this._id, role: this.role },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRE }
+  );
+};
+
+userSchema.methods.generateRefreshToken = function () {
+  return jwt.sign(
+    { id: this._id },
+    process.env.REFRESH_TOKEN_SECRET,
+    { expiresIn: process.env.REFRESH_TOKEN_EXPIRE }
   );
 };
 

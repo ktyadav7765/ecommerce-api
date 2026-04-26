@@ -6,12 +6,12 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 const compressionMiddleware = require('./middleware/compression');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
-
+const { swaggerUi, specs } = require('./config/swagger');
 const errorHandler = require('./middleware/errorHandler');
 const AppError = require('./utils/AppError');
 
 const app = express();
-
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(specs));
 app.use(compressionMiddleware);
 app.use('/api', apiLimiter);
 app.use('/api/auth/login', authLimiter);
