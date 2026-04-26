@@ -2,6 +2,7 @@ const Product = require('../models/Product');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const APIFeatures = require('../utils/apiFeatures');
+const { clearProductCache } = require('../utils/cacheInvalidation');
 
 const createProduct = asyncHandler(async (req, res) => {
   if (req.file) {
@@ -9,7 +10,7 @@ const createProduct = asyncHandler(async (req, res) => {
   }
 
   const product = await Product.create(req.body);
-
+  await clearProductCache();
   res.status(201).json({ success: true, data: product });
 });
 
@@ -98,7 +99,7 @@ const updateProduct = asyncHandler(async (req, res) => {
   if (!product) {
     throw new AppError('Product not found', 404);
   }
-
+	await clearProductCache();
   res.json({ success: true, data: product });
 });
 
@@ -111,6 +112,7 @@ const deleteProduct = asyncHandler(async (req, res) => {
 
   product.isActive = false;
   await product.save();
+  await clearProductCache();
 
   res.json({ success: true, message: 'Product deactivated' });
 });

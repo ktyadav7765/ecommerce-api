@@ -4,11 +4,18 @@ const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const compressionMiddleware = require('./middleware/compression');
+const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
 
 const errorHandler = require('./middleware/errorHandler');
 const AppError = require('./utils/AppError');
 
 const app = express();
+
+app.use(compressionMiddleware);
+app.use('/api', apiLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
 
 // Security
 app.use(helmet());

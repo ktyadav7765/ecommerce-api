@@ -20,11 +20,36 @@ const {
 } = require('../middleware/validators');
 const { uploadProductImage } = require('../middleware/upload');
 
-router.get('/', getAllProducts);
-router.get('/featured', getFeaturedProducts);
-router.get('/category/:categoryId', getProductsByCategory);
-router.get('/slug/:slug', getProductBySlug);
-router.get('/:id', mongoIdValidator, getProductById);
+router.get(
+  '/',
+  cache((req) => `products:${JSON.stringify(req.query)}`, 300),
+  getAllProducts
+);
+
+router.get(
+  '/featured',
+  cache((req) => `featured:${JSON.stringify(req.query)}`, 300),
+  getFeaturedProducts
+);
+
+router.get(
+  '/category/:categoryId',
+  cache((req) => `category-products:${req.params.categoryId}:${JSON.stringify(req.query)}`, 300),
+  getProductsByCategory
+);
+
+router.get(
+  '/slug/:slug',
+  cache((req) => `product-slug:${req.params.slug}`, 300),
+  getProductBySlug
+);
+
+router.get(
+  '/:id',
+  mongoIdValidator,
+  cache((req) => `product-id:${req.params.id}`, 300),
+  getProductById
+);
 
 router.use(protect, authorize('admin'));
 

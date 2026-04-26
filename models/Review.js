@@ -68,5 +68,5 @@ reviewSchema.post('findOneAndDelete', function (doc) {
     doc.constructor.calcAverageRating(doc.product);
   }
 });
-
+reviewSchema.index({ product: 1, createdAt: -1 });
 module.exports = mongoose.model('Review', reviewSchema);

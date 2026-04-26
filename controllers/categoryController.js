@@ -1,6 +1,7 @@
 const Category = require('../models/Category');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
+const { clearCategoryCache } = require('../utils/cacheInvalidation');
 
 const createCategory = asyncHandler(async (req, res) => {
   if (req.file) {
@@ -8,7 +9,7 @@ const createCategory = asyncHandler(async (req, res) => {
   }
 
   const category = await Category.create(req.body);
-
+  await clearCategoryCache();
   res.status(201).json({ success: true, data: category });
 });
 
@@ -48,7 +49,7 @@ const updateCategory = asyncHandler(async (req, res) => {
   if (!category) {
     throw new AppError('Category not found', 404);
   }
-
+ await clearCategoryCache();
   res.json({ success: true, data: category });
 });
 
@@ -70,7 +71,7 @@ const deleteCategory = asyncHandler(async (req, res) => {
   }
 
   await Category.findByIdAndDelete(req.params.id);
-
+await clearCategoryCache();
   res.json({ success: true, message: 'Category deleted' });
 });
 

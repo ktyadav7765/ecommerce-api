@@ -3,6 +3,7 @@ const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
+const { orderQueue } = require('../config/queue');
 
 const createOrder = asyncHandler(async (req, res) => {
   const cart = await Cart.findOne({ user: req.user.id }).populate(
@@ -55,7 +56,10 @@ const createOrder = asyncHandler(async (req, res) => {
 
   res.status(201).json({ success: true, data: order });
 });
-
+await orderQueue.add({
+  orderId: order._id.toString(),
+  userId: req.user.id
+});
 const getMyOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find({ user: req.user.id }).sort('-createdAt');
 
