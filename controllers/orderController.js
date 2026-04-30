@@ -71,6 +71,7 @@ const createOrder = asyncHandler(async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
+    // Add job to the worker queue
     await orderQueue.add({
       orderId: order._id.toString(),
       userId: req.user.id
@@ -87,64 +88,8 @@ const createOrder = asyncHandler(async (req, res) => {
   }
 });
 
-const createOrder = asyncHandler(async (req, res) => {
-  const cart = await Cart.findOne({ user: req.user.id }).populate(
-    'items.product',
-    'name image stock isActive price discountPrice'
-  );
-
-  if (!cart || cart.items.length === 0) {
-    throw new AppError('Cart is empty. Add items before ordering.', 400);
-  }
-
-  for (const item of cart.items) {
-    if (!item.product.isActive) {
-      throw new AppError(
-        `Product "${item.product.name}" is no longer available`,
-        400
-      );
-    }
-    if (item.quantity > item.product.stock) {
-      throw new AppError(
-        `Not enough stock for "${item.product.name}". Available: ${item.product.stock}`,
-        400
-      );
-    }
-  }
-
-  const orderItems = cart.items.map((item) => ({
-    product: item.product._id,
-    name: item.product.name,
-    quantity: item.quantity,
-    price: item.price,
-    image: item.product.image
-  }));
-
-  const order = await Order.create({
-    user: req.user.id,
-    items: orderItems,
-    shippingAddress: req.body.shippingAddress,
-    paymentMethod: req.body.paymentMethod
-  });
-
-  for (const item of cart.items) {
-    await Product.findByIdAndUpdate(item.product._id, {
-      $inc: { stock: -item.quantity }
-    });
-  }
-
-  cart.items = [];
-  await cart.save();
-
-  res.status(201).json({ success: true, data: order });
-});
-await orderQueue.add({
-  orderId: order._id.toString(),
-  userId: req.user.id
-});
 const getMyOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find({ user: req.user.id }).sort('-createdAt');
-
   res.json({ success: true, count: orders.length, data: orders });
 });
 
