@@ -7,6 +7,7 @@ const {
   logout,
   getMe,
   updateProfile,
+  refreshAccessToken,
   updatePassword
 } = require('../controllers/authController');
 
